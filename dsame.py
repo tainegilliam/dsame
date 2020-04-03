@@ -20,7 +20,7 @@ import logging
 import datetime
 import time
 import subprocess
-    
+
 def alert_start(JJJHHMM, format='%j%H%M'):
     import calendar
     """Convert EAS date string to datetime format"""
@@ -42,9 +42,9 @@ def time_str(x, type='hour'):
         return ''.join([str(x),' ',type])
     elif x>=2:
         return ''.join([str(x),' ',type,'s'])
-    
+
 def get_length(TTTT):
-    hh,mm=TTTT[:2],TTTT[2:]  
+    hh,mm=TTTT[:2],TTTT[2:]
     return ' '.join(filter(None, (time_str(int(hh)), time_str(int(mm), type='minute'))))
 
 def county_decode(input, COUNTRY):
@@ -97,11 +97,11 @@ def get_indicator(input):
         pass
     return indicator
 
-def printf(output=''):   
+def printf(output=''):
     output=output.lstrip(' ')
     output=' '.join(output.split())
     sys.stdout.write(''.join([output, '\n']))
- 
+
 def alert_end(JJJHHMM, TTTT):
     alertstart = alert_start(JJJHHMM)
     delta = datetime.timedelta(hours = int(TTTT[:2]), minutes=int(TTTT[2:]))
@@ -111,7 +111,7 @@ def alert_length(TTTT):
     delta = datetime.timedelta(hours = int(TTTT[:2]), minutes=int(TTTT[2:]))
     return delta.seconds
 
-def get_location(STATION=None, TYPE=None): 
+def get_location(STATION=None, TYPE=None):
     location=''
     if TYPE=='NWS':
         try:
@@ -138,7 +138,7 @@ def kwdict(**kwargs):
 
 def format_message(command, ORG='WXR', EEE='RWT',PSSCCC=[],TTTT='0030',JJJHHMM='0010000', STATION=None, TYPE=None, LLLLLLLL=None, COUNTRY='US', LANG='EN', MESSAGE=None,**kwargs):
     return command.format(ORG=ORG, EEE=EEE, TTTT=TTTT, JJJHHMM=JJJHHMM, STATION=STATION, TYPE=TYPE, LLLLLLLL=LLLLLLLL, COUNTRY=COUNTRY, LANG=LANG, event=get_event(EEE), type=get_indicator(EEE), end=fn_dt(alert_end(JJJHHMM,TTTT)), start=fn_dt(alert_start(JJJHHMM)), organization=defs.SAME__ORG[ORG]['NAME'][COUNTRY], PSSCCC='-'.join(PSSCCC), location=get_location(STATION, TYPE), date=fn_dt(datetime.datetime.now(),'%c'), length=get_length(TTTT), seconds=alert_length(TTTT), MESSAGE=MESSAGE, **kwargs)
- 
+
 def readable_message(ORG='WXR',EEE='RWT',PSSCCC=[],TTTT='0030',JJJHHMM='0010000',STATION=None, TYPE=None, LLLLLLLL=None, COUNTRY='US', LANG='EN'):
     import textwrap
     printf()
@@ -175,10 +175,10 @@ def clean_msg(same):
         offset = slen-ridx
         if (offset <= 8):
             same=''.join([same.ljust(slen+(8-offset)+1,'?'), '-'])      # Add final dash and/or pad location field
-              
+
     return same
-   
-def same_decode(same, lang, same_watch=None, event_watch=None, text=True, call=None, command=None, jsonfile=None):
+
+def same_decode(same, lang, same_watch=None, event_watch=None, text=True, call=None, command=None, jsonfile=None, mqtthost=None):
     try:
         same = clean_msg(same)
     except:
@@ -204,7 +204,7 @@ def same_decode(same, lang, same_watch=None, event_watch=None, text=True, call=N
             PSSCCC_list=PSSCCC.split('-')
         except:
             format_error()
-        
+
         try:
             TTTT,JJJHHMM,LLLLLLLL,tail=S2.split('-')
         except:
@@ -254,15 +254,24 @@ def same_decode(same, lang, same_watch=None, event_watch=None, text=True, call=N
                 MESSAGE=readable_message(ORG, EEE, PSSCCC_list, TTTT, JJJHHMM, STATION, TYPE, LLLLLLLL, COUNTRY, lang)
             else:
                 MESSAGE=None
+            if mqtthost:
+                try:
+                    import paho.mqtt.publish as mqtt
+                    import json
+                    data=kwdict(ORG=ORG, EEE=EEE, TTTT=TTTT, JJJHHMM=JJJHHMM, STATION=STATION, TYPE=TYPE, LLLLLLLL=LLLLLLLL, COUNTRY=COUNTRY, LANG=lang, event=get_event(EEE), type=get_indicator(EEE), end=fn_dt(alert_end(JJJHHMM,TTTT)), start=fn_dt(alert_start(JJJHHMM)), organization=defs.SAME__ORG[ORG]['NAME'][COUNTRY], PSSCCC=PSSCCC, PSSCCC_list=PSSCCC_list, location=get_location(STATION, TYPE), date=fn_dt(datetime.datetime.now(),'%c'), length=get_length(TTTT), seconds=alert_length(TTTT), MESSAGE=MESSAGE)
+                    mqtt.single('raw/weatherAlert',json.dumps(data), hostname=mqtthost)
+                except Exception as detail:
+                        logging.error(detail)
+                        return
             if jsonfile:
                 try:
                     import json
                     data=kwdict(ORG=ORG, EEE=EEE, TTTT=TTTT, JJJHHMM=JJJHHMM, STATION=STATION, TYPE=TYPE, LLLLLLLL=LLLLLLLL, COUNTRY=COUNTRY, LANG=lang, event=get_event(EEE), type=get_indicator(EEE), end=fn_dt(alert_end(JJJHHMM,TTTT)), start=fn_dt(alert_start(JJJHHMM)), organization=defs.SAME__ORG[ORG]['NAME'][COUNTRY], PSSCCC=PSSCCC, PSSCCC_list=PSSCCC_list, location=get_location(STATION, TYPE), date=fn_dt(datetime.datetime.now(),'%c'), length=get_length(TTTT), seconds=alert_length(TTTT), MESSAGE=MESSAGE)
-                    with open(jsonfile, 'w') as outfile:
-                        json.dump(data, outfile)               
+                    with open(jsonfile, 'a+') as outfile:
+                        json.dump(data, outfile)
                 except Exception as detail:
                         logging.error(detail)
-                        return           
+                        return
             if command:
                 if call:
                     l_cmd=[]
@@ -297,33 +306,33 @@ def parse_arguments():
     parser.add_argument('--call', help='call external command')
     parser.add_argument('--command', nargs='*', help='command message')
     parser.add_argument('--json', help='write to json file')
+    parser.add_argument('--mqtt', help='send to host')
     parser.add_argument('--source', help='source program')
     parser.set_defaults(text=True)
     args, unknown = parser.parse_known_args()
     return args
-    
+
 def main():
     args=parse_arguments()
     logging.basicConfig(level=args.loglevel,format='%(levelname)s: %(message)s')
     if args.msg:
-        same_decode(args.msg, args.lang, same_watch=args.same, event_watch=args.event, text=args.text, call=args.call, command=args.command, jsonfile=args.json)
+	input_source = [args.msg]
     elif args.source:
         try:
             source_process = subprocess.Popen(args.source, stdout=subprocess.PIPE)
+	    input_source = source_process.stdout
         except Exception as detail:
-                logging.error(detail)
-                return
-        while True:
-            line = source_process.stdout.readline()
-            if line:
-                logging.debug(line)
-                same_decode(line, args.lang, same_watch=args.same, event_watch=args.event, text=args.text, call=args.call, command=args.command, jsonfile=args.json)
+            logging.error(detail)
+            return
     else:
-        while True:
-            for line in sys.stdin:
-                logging.debug(line)
-                same_decode(line, args.lang, same_watch=args.same, event_watch=args.event, text=args.text, call=args.call, command=args.command, jsonfile=args.json)
+	input_source = sys.stdin
 
+    for line in input_source:
+	# subprocess stdout will yield bytes instead of str.
+	if type(line) is bytes:
+	    line = line.decode("ascii")
+        logging.debug(line)
+        same_decode(line, args.lang, same_watch=args.same, event_watch=args.event, text=args.text, call=args.call, command=args.command, jsonfile=args.json, mqtthost=args.mqtt)
 
 if __name__ == "__main__":
     try:
